@@ -5,6 +5,7 @@ import java.util.concurrent.Executors;
 
 import org.jboss.netty.bootstrap.ClientBootstrap;
 import org.jboss.netty.channel.ChannelFactory;
+import org.jboss.netty.channel.ChannelFuture;
 import org.jboss.netty.channel.ChannelPipeline;
 import org.jboss.netty.channel.ChannelPipelineFactory;
 import org.jboss.netty.channel.Channels;
@@ -27,13 +28,23 @@ public class TimeClient extends SimpleChannelHandler {
         bootstrap.setPipelineFactory(new ChannelPipelineFactory() {
             @Override
 			public ChannelPipeline getPipeline() {
-                return Channels.pipeline(new TimeClientHandler());
+                return Channels.pipeline(new TimeDecoder(), new TimeClientHandler());
             }
         });
-
         bootstrap.setOption("tcpNoDelay", true);
         bootstrap.setOption("keepAlive", true);
 
-        bootstrap.connect(new InetSocketAddress(host, port));
+        // try connect
+        final ChannelFuture future = bootstrap.connect(new InetSocketAddress(host, port));
+        future.awaitUninterruptibly();
+        if(!future.isSuccess()) {
+        	// connect failed
+        	future.getCause().printStackTrace();
+        }
+        // sit on the channel's 'close future'
+        future.getChannel().getCloseFuture().awaitUninterruptibly();
+        // all connections close now:
+        factory.releaseExternalResources();
+        System.out.println("A graceful client shutdown. Jolly decent.");
 	}
 }
